@@ -106,6 +106,7 @@ def build_rows(data):
             "onset": onset,
             "wake": wake,
             "bed_min": clock_min(onset) if onset else None,
+            "wake_min": wake.hour * 60 + wake.minute if wake else None,
             "naps": len(day.get("naps") or []),
             "workouts": day.get("workouts") or [],
         })
@@ -133,12 +134,17 @@ def build_flags(rows):
     beds = [r["bed_min"] for r in rows if r["bed_min"] is not None]
     hi_strain = round(quantile(strains, 0.75), 1) if len(strains) >= 20 else None
     late_bed = st.median(beds) + 45 if len(beds) >= 20 else None
+    wakes = [r["wake_min"] for r in rows if r["wake_min"] is not None]
+    late_wake = st.median(wakes) + 60 if len(wakes) >= 20 else None
 
     dec = lambda v: str(v).replace(".", T["decimal"])
     fmt = {"hi": dec(hi_strain), "late": fmt_clock(late_bed) if late_bed else "?",
-           "usual": fmt_clock(late_bed - 45) if late_bed else "?"}
+           "usual": fmt_clock(late_bed - 45) if late_bed else "?",
+           "late_wake": fmt_clock(late_wake - 720) if late_wake else "?",
+           "usual_wake": fmt_clock(late_wake - 780) if late_wake else "?"}
     defs = []
-    for key in ("late_workout", "short_sleep", "late_bed", "bed_shift", "weekend", "high_strain", "back_to_back",
+    for key in ("late_workout", "short_sleep", "late_bed", "bed_shift", "wake_shift", "slept_in", "weekend",
+                "high_strain", "back_to_back",
                 "hard_zones", "zone2", "morning_workout", "rest_day", "nap"):
         on, off, action = (x.format(**fmt) for x in T["flags"][key])
         defs.append(dict(key=key, on=on, off=off, action=action))
@@ -160,6 +166,11 @@ def build_flags(rows):
         f["late_bed"] = None if (r["bed_min"] is None or late_bed is None) else r["bed_min"] > late_bed
         f["bed_shift"] = (None if r["bed_min"] is None or not p or p["bed_min"] is None
                           else abs(r["bed_min"] - p["bed_min"]) > 60)
+        f["wake_shift"] = (None if r["wake_min"] is None or not p or p["wake_min"] is None
+                           else abs(r["wake_min"] - p["wake_min"]) > 60)
+        # Slept in the morning before (D-1): does a late wake-up shift the next night?
+        f["slept_in"] = (None if not p or p["wake_min"] is None or late_wake is None
+                         else p["wake_min"] > late_wake)
         f["weekend"] = None if not r["onset"] else date.fromisoformat(r["date"]).weekday() in (5, 6)
         ps = p["strain"] if p else None
         f["high_strain"] = None if ps is None or hi_strain is None else ps >= hi_strain
@@ -175,7 +186,8 @@ def build_flags(rows):
             for k in ("hard_zones", "zone2", "morning_workout", "rest_day", "nap"):
                 f[k] = None
         vals.append(f)
-    thresholds = {"high_strain": dec(hi_strain) if hi_strain is not None else None, "late_bed": fmt_clock(late_bed) if late_bed else None}
+    thresholds = {"late_wake": fmt_clock(late_wake - 720) if late_wake else None,
+                  "high_strain": dec(hi_strain) if hi_strain is not None else None, "late_bed": fmt_clock(late_bed) if late_bed else None}
     return defs, vals, thresholds
 
 
