@@ -462,9 +462,11 @@ def local_date(ts, offset):
 def build_days(cycles, recoveries, sleeps, workouts, start_date, end_date):
     """Key each calendar day (local time) to its cycle + recovery + main sleep (+ naps, workouts).
 
-    A WHOOP cycle begins when you wake, so the cycle's local start date is 'the day'. Its
-    recovery is linked by cycle_id, and the recovery's sleep_id points at the night of sleep
-    that ended that morning. Naps and workouts are attached to the day they started on.
+    A WHOOP cycle runs from one sleep onset to the next, so its start date flips depending on
+    whether you fell asleep before or after midnight. The day is therefore keyed by the local
+    date you woke up: the end of the cycle's main sleep, or, without a sleep, cycle start + 6 h.
+    The recovery is linked by cycle_id and its sleep_id points at that night's sleep. Naps and
+    workouts are attached to the day they started on.
     """
     rec_by_cycle = {r["cycle_id"]: r for r in recoveries if r.get("cycle_id") is not None}
     sleep_by_id = {s["id"]: s for s in sleeps}
@@ -478,10 +480,13 @@ def build_days(cycles, recoveries, sleeps, workouts, start_date, end_date):
 
     days = {}
     for c in sorted(cycles, key=lambda c: c["start"]):
-        d = local_date(c["start"], c.get("timezone_offset"))
         rec = rec_by_cycle.get(c["id"])
         sl = sleep_by_id.get(rec.get("sleep_id")) if rec else None
         sl = sl or main_sleep_by_cycle.get(c["id"])
+        if sl and sl.get("end"):
+            d = local_date(sl["end"], sl.get("timezone_offset"))
+        else:
+            d = (to_local(c["start"], c.get("timezone_offset")) + timedelta(hours=6)).date().isoformat()
         entry = {
             "date": d,
             "cycle": norm_cycle(c),
@@ -605,7 +610,7 @@ def main():
             "calories": "kcal = kilojoule / 4.184",
             "hrv_rmssd_ms": "milliseconds (HRV value, not a duration)",
             "times": "ISO 8601 in the timezone the record was captured in",
-            "day_key": "local calendar date the physiological cycle started (i.e. the wake-up day)",
+            "day_key": "local date you woke up (end of the cycle's main sleep; else cycle start + 6 h)",
         },
         "coverage": cov,
         "errors": errors,

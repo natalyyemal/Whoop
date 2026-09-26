@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WHOOP Health Dashboard</title>
+<style>
+:root {
+  color-scheme: dark;
+  --page: #0b0b0c;
+  --surface: #161615;
+  --surface-2: #1d1d1b;
+  --text: #ffffff;
+  --text-2: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --hair: rgba(255,255,255,0.08);
+  --s1: #3987e5;  /* blue   - your value / deep sleep */
+  --s2: #d95926;  /* orange - REM */
+  --s3: #199e70;  /* aqua   - light sleep */
+  --s4: #c98500;  /* yellow - awake */
+  --good: #0ca30c;
+  --warn: #fab219;
+  --bad: #d03b3b;
+  --band: rgba(195,194,183,0.11);
+  --radius: 16px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: radial-gradient(1200px 600px at 10% -10%, #17202b 0%, transparent 60%), var(--page);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1280px; margin: 0 auto; padding: 32px 16px 80px; }
+@media (min-width: 720px) { .wrap { padding: 40px 32px 96px; } }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
+.brand { font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: 30px; font-weight: 600; letter-spacing: -.02em; margin: 4px 0 0; }
+.meta { color: var(--text-2); font-size: 13px; text-align: right; }
+.meta b { color: var(--text); font-weight: 600; }
+.demo { background: #3a2a07; border: 1px solid #6b4d0c; color: #ffd98a; padding: 12px 16px; border-radius: 12px; margin-bottom: 24px; font-size: 14px; }
+.errors { background: #3a1212; border: 1px solid #6b1c1c; color: #ffb3b3; padding: 12px 16px; border-radius: 12px; margin-bottom: 24px; font-size: 14px; }
+section { margin-top: 44px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 16px; }
+h2 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
+.sub { color: var(--muted); font-size: 13px; }
+.card { background: var(--surface); border: 1px solid var(--hair); border-radius: var(--radius); padding: 20px; min-width: 0; }
+.grid-tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); }
+.tile { position: relative; overflow: hidden; }
+.tile .label { color: var(--text-2); font-size: 13px; display: flex; justify-content: space-between; gap: 8px; }
+.tile .value { font-size: 46px; font-weight: 300; letter-spacing: -.03em; line-height: 1.1; margin: 10px 0 12px; }
+.tile .unit { font-size: 18px; color: var(--muted); margin-left: 4px; font-weight: 400; letter-spacing: 0; }
+.tile .foot { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.delta { font-weight: 600; font-variant-numeric: tabular-nums; }
+.delta.good { color: var(--good); } .delta.bad { color: var(--bad); } .delta.neutral { color: var(--text-2); }
+.zone { font-size: 12px; display: inline-flex; align-items: center; gap: 6px; }
+.zone i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.stale { font-size: 11px; color: var(--warn); }
+.toolbar { display: inline-flex; background: var(--surface); border: 1px solid var(--hair); border-radius: 10px; padding: 3px; }
+.toolbar button { background: none; border: 0; color: var(--text-2); font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 7px; cursor: pointer; }
+.toolbar button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--hair); }
+.grid-charts { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 900px) { .grid-charts { grid-template-columns: 1fr 1fr; } }
+.chart-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.chart-title b { font-weight: 600; font-size: 14px; }
+.chart-title span { color: var(--muted); font-size: 12px; }
+.chart { width: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--text-2); font-size: 12px; margin: 0 0 14px; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.sw-line { width: 18px; height: 2px; border-radius: 2px; display: inline-block; }
+.sw-band { width: 18px; height: 10px; border-radius: 3px; background: var(--band); display: inline-block; }
+.sw-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.sw-sq { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+svg text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+svg .grid { stroke: var(--grid); stroke-width: 1; }
+svg .axis { stroke: var(--axis); stroke-width: 1; }
+.tip { position: fixed; pointer-events: none; z-index: 10; background: #232321; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 8px 10px; font-size: 12px; color: var(--text); box-shadow: 0 8px 24px rgba(0,0,0,.5); opacity: 0; transition: opacity .08s; max-width: 260px; }
+.tip .t-d { color: var(--muted); margin-bottom: 2px; }
+.tip .t-r { display: flex; justify-content: space-between; gap: 14px; font-variant-numeric: tabular-nums; }
+.tip .t-r span:first-child { color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; }
+.two { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 1000px) { .two { grid-template-columns: 1fr 1fr; } }
+.stack-row { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; align-items: center; margin: 10px 0; font-size: 13px; color: var(--text-2); }
+.stack-bar { display: flex; gap: 2px; height: 28px; }
+.stack-bar div { border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; font-weight: 600; min-width: 0; overflow: hidden; white-space: nowrap; }
+/* insights */
+.insight h3 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+.insight .explain { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+.eff { display: grid; grid-template-columns: 26px 1fr; gap: 4px 12px; padding: 14px 0; border-top: 1px solid var(--hair); }
+.eff:first-of-type { border-top: 0; }
+.eff .rk { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; padding-top: 1px; }
+.eff .lbl { font-weight: 500; }
+.eff .line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 6px; }
+.eff .num { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.eff .n { color: var(--text-2); font-size: 13px; }
+.eff .adj { grid-column: 2; color: var(--muted); font-size: 12.5px; }
+.bar { position: relative; height: 6px; background: var(--surface-2); border-radius: 4px; flex: 1 1 120px; max-width: 220px; }
+.bar i { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 4px; }
+.eff.dim .lbl, .eff.dim .num { color: var(--text-2); }
+.badge { font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 2px 8px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+.badge.strong { color: #7ee07e; border-color: rgba(12,163,12,.45); background: rgba(12,163,12,.10); }
+.badge.likely { color: #ffd27a; border-color: rgba(250,178,25,.4); background: rgba(250,178,25,.08); }
+.badge.noise, .badge.thin { color: var(--muted); border-color: var(--axis); }
+.thin-list { margin-top: 10px; padding-top: 12px; border-top: 1px dashed var(--axis); color: var(--muted); font-size: 12.5px; }
+.verdict { font-size: 15px; margin: 4px 0 14px; color: var(--text-2); }
+.verdict b { color: var(--text); }
+.bigrange { font-size: 40px; font-weight: 300; letter-spacing: -.02em; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 9px 10px; border-bottom: 1px solid var(--hair); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; }
+.chip.worse { color: #ff8b8b; } .chip.better { color: #7ee07e; } .chip.stable, .chip.thin, .chip.changed { color: var(--muted); }
+tr.worse td { background: rgba(208,59,59,.07); }
+.scroll { overflow-x: auto; }
+.top3 { display: grid; gap: 12px; grid-template-columns: 1fr; counter-reset: pri; }
+@media (min-width: 1000px) { .top3 { grid-template-columns: repeat(3, 1fr); } }
+.pri { background: linear-gradient(180deg, #1b2230 0%, var(--surface) 70%); }
+.pri .no { font-size: 13px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; }
+.pri .gain { font-size: 44px; font-weight: 300; letter-spacing: -.03em; margin: 6px 0 2px; color: #fff; }
+.pri .gain small { font-size: 15px; color: var(--muted); letter-spacing: 0; margin-left: 6px; }
+.pri .act { font-size: 16px; font-weight: 600; margin: 8px 0 10px; }
+.pri p { color: var(--text-2); font-size: 13.5px; margin: 0 0 8px; }
+.method { color: var(--muted); font-size: 13px; }
+.method li { margin: 4px 0; }
+details summary { cursor: pointer; color: var(--text-2); font-size: 14px; }
+.empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div class="tip" id="tip" role="tooltip"></div>
+<script>
+const D = /*__DATA__*/null;
+const NS = "http://www.w3.org/2000/svg";
+const COLORS = { s1: "#3987e5", s2: "#d95926", s3: "#199e70", s4: "#c98500", good: "#0ca30c", bad: "#d03b3b", base: "#c3c2b7", band: "rgba(195,194,183,0.11)", surface: "#161615" };
+const K = 1.5; // normal range = baseline ± 1.5 SD; outside it counts as a breakout
+const STAGES = [["Deep", COLORS.s1], ["REM", COLORS.s2], ["Light", COLORS.s3], ["Awake", COLORS.s4]];
+const META = Object.fromEntries(D.series_meta.map(m => [m.key, m]));
+const app = document.getElementById("app");
+const tip = document.getElementById("tip");
+
+// ---------------------------------------------------------------- helpers
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const num = (v, dec = 0) => v == null ? "—" : Number(v).toFixed(dec);
+const signed = (v, dec = 1) => v == null ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(dec);
+const hm = h => { if (h == null) return "—"; const m = Math.round(h * 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`; };
+const fmtVal = (key, v) => key === "sleep_hours" ? hm(v) : num(v, META[key]?.dec ?? 1);
+const dt = s => new Date(s + "T00:00:00");
+const dfmt = (s, opts = { month: "short", day: "numeric" }) => dt(s).toLocaleDateString(undefined, opts);
+const pct = v => v == null ? "" : `${Math.round(v * 100)}%`;
+function el(tag, attrs = {}, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function niceTicks(lo, hi, n = 4) {
+  const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw || 1))), r = raw / mag;
+  const step = (r < 1.5 ? 1 : r < 3 ? 2 : r < 7 ? 5 : 10) * mag, out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(6));
+  return out;
+}
+function showTip(html, x, y) {
+  tip.innerHTML = html; tip.style.opacity = 1;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let left = x + 14, top = y + 14;
+  if (left + w > innerWidth - 8) left = x - w - 14;
+  if (top + h > innerHeight - 8) top = y - h - 14;
+  tip.style.left = Math.max(8, left) + "px"; tip.style.top = Math.max(8, top) + "px";
+}
+const hideTip = () => { tip.style.opacity = 0; };
+function goodness(key, diff) {
+  const g = META[key]?.good;
+  if (!g || diff == null || diff === 0) return "neutral";
+  return (diff > 0) === (g === "up") ? "good" : "bad";
+}
+
+// ---------------------------------------------------------------- state
+let RANGE = "all";
+function inRange(dateStr) {
+  if (RANGE === "all") return true;
+  const last = dt(D.table[D.table.length - 1].date), days = RANGE === "30" ? 30 : 90;
+  return (last - dt(dateStr)) / 864e5 < days;
+}
+
+// ---------------------------------------------------------------- page
+function header() {
+  const c = D.coverage || {}, p = D.profile || {};
+  const gaps = c.gaps || {};
+  const name = [p.first_name, p.last_name].filter(Boolean).join(" ");
+  app.insertAdjacentHTML("beforeend", `
+    ${D.demo ? `<div class="demo"><b>Demo data.</b> Every number on this page comes from synthetic data generated by make_demo_data.py, not from a real WHOOP account. Run <code>python3 build_dashboard.py</code> after <code>whoop_sync.py</code> to see your own.</div>` : ""}
+    ${D.errors.length ? `<div class="errors"><b>Some data could not be pulled:</b><br>${D.errors.map(esc).join("<br>")}</div>` : ""}
+    <header>
+      <div><div class="brand">WHOOP · Health</div><h1>${esc(name || "Your dashboard")}</h1></div>
+      <div class="meta">
+        <div><b>${c.first_day_with_data ? dfmt(c.first_day_with_data, { month: "short", day: "numeric", year: "numeric" }) : "—"}</b> → <b>${c.last_day_with_data ? dfmt(c.last_day_with_data, { month: "short", day: "numeric", year: "numeric" }) : "—"}</b></div>
+        <div>${c.days_with_cycle ?? "—"} days with data of ${c.calendar_days_in_window ?? "—"} · ${c.days_with_recovery ?? "—"} recoveries · ${c.days_with_sleep ?? "—"} sleeps</div>
+        <div>Gaps: ${(gaps.no_data_at_all || []).length ? esc(gaps.no_data_at_all.join(", ")) : "none"}</div>
+      </div>
+    </header>`);
+}
+
+function tilesSection() {
+  const latest = D.tiles.map(t => t.date).filter(Boolean).sort().pop();
+  const html = D.tiles.map(t => {
+    if (t.value == null) return `<div class="card tile"><div class="label">${esc(t.label)}</div><div class="value">—</div><div class="foot">No data</div></div>`;
+    const diff = t.baseline == null ? null : t.value - t.baseline;
+    const near = diff != null && t.sd != null && Math.abs(diff) < 0.25 * t.sd;
+    const cls = near ? "neutral" : goodness(t.key, diff);
+    const arrow = diff == null ? "" : near ? "≈" : diff > 0 ? "▲" : "▼";
+    const dshow = t.key === "sleep_hours" ? (diff == null ? "" : `${diff > 0 ? "+" : "−"}${Math.round(Math.abs(diff) * 60)} min`) : signed(diff, t.dec);
+    const outside = diff != null && t.sd && Math.abs(diff) > t.sd;
+    let zone = "";
+    if (t.key === "recovery") {
+      const [zc, zn] = t.value >= 67 ? [COLORS.good, "Green"] : t.value >= 34 ? ["#fab219", "Yellow"] : [COLORS.bad, "Red"];
+      zone = `<span class="zone"><i style="background:${zc}"></i>${zn} zone</span>`;
+    }
+    const value = t.key === "sleep_hours" ? hm(t.value).replace(/(\d+)h (\d+)m/, `$1<span class="unit">h</span> $2<span class="unit">m</span>`) : `${num(t.value, t.dec)}<span class="unit">${esc(t.unit)}</span>`;
+    return `<div class="card tile">
+      <div class="label"><span>${esc(t.label)}</span>${zone}</div>
+      <div class="value">${value}</div>
+      <div class="foot">
+        ${diff == null ? `<span>Baseline needs 7+ days (have ${t.base_n})</span>` : `<span class="delta ${cls}" title="${cls === "good" ? "Better than baseline" : cls === "bad" ? "Worse than baseline" : "Near baseline"}">${arrow} ${near ? "at baseline" : dshow}</span><span>vs 30-day baseline ${fmtVal(t.key, t.baseline)}${t.key === "sleep_hours" ? "" : esc(t.unit ? " " + t.unit : "")}</span>`}
+        ${outside ? `<span class="stale" style="color:var(--text-2)">outside your normal range</span>` : ""}
+        ${t.in_progress ? `<span class="stale">day in progress</span>` : ""}
+        ${t.date !== latest ? `<span class="stale">from ${dfmt(t.date)}</span>` : ""}
+      </div></div>`;
+  }).join("");
+  app.insertAdjacentHTML("beforeend", `<section><div class="sec-head"><h2>Today · ${latest ? dfmt(latest, { weekday: "long", month: "short", day: "numeric" }) : ""}</h2><span class="sub">Arrows compare today with the average of your previous 30 days</span></div><div class="grid-tiles">${html}</div></section>`);
+}
+
+function trendsSection() {
+  const keys = ["recovery", "hrv", "rhr", "sleep_perf", "sleep_hours", "strain", "spo2", "resp", "deep_min", "rem_min", "sleep_consistency", "disturbances"];
+  app.insertAdjacentHTML("beforeend", `<section id="trends">
+    <div class="sec-head"><h2>Trends against your baseline</h2>
+      <div class="toolbar" role="group" aria-label="Date range">${[["30", "30 days"], ["90", "90 days"], ["all", "All"]].map(([k, l]) => `<button data-range="${k}" aria-pressed="${k === RANGE}">${l}</button>`).join("")}</div></div>
+    <div class="legend">
+      <span><i class="sw-line" style="background:${COLORS.s1};opacity:.35"></i>Daily value</span>
+      <span><i class="sw-line" style="background:${COLORS.s1};height:3px"></i>7-day average</span>
+      <span><i class="sw-line" style="background:${COLORS.base}"></i>30-day baseline (trailing average)</span>
+      <span><i class="sw-band"></i>Normal range (±1.5 SD)</span>
+      <span><i class="sw-dot" style="background:${COLORS.good}"></i>Broke out, better</span>
+      <span><i class="sw-dot" style="background:${COLORS.bad}"></i>Broke out, worse</span>
+    </div>
+    <div class="grid-charts">${keys.map(k => `<div class="card"><div class="chart-title"><b>${esc(META[k].label)}</b><span id="brk-${k}"></span></div><div class="chart" data-line="${k}"></div></div>`).join("")}</div>
+  </section>`);
+  document.querySelectorAll("[data-range]").forEach(b => b.addEventListener("click", () => {
+    RANGE = b.dataset.range;
+    document.querySelectorAll("[data-range]").forEach(x => x.setAttribute("aria-pressed", x.dataset.range === RANGE));
+    drawCharts();
+  }));
+}
+
+function lineChart(host, key) {
+  const meta = META[key];
+  const pts = D.series[key].filter(p => inRange(p[0]));
+  host.innerHTML = "";
+  const W = Math.max(280, host.clientWidth), H = 180, m = { l: 40, r: 10, t: 10, b: 24 };
+  const vals = [];
+  pts.forEach(p => { if (p[1] != null) vals.push(p[1]); if (p[2] != null && p[3] != null) vals.push(p[2] - K * p[3], p[2] + K * p[3]); });
+  if (!vals.length) { host.innerHTML = `<div class="empty">No data in this range.</div>`; return; }
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+  const t0 = +dt(pts[0][0]), t1 = +dt(pts[pts.length - 1][0]);
+  const X = s => m.l + ((+dt(s)) - t0) / ((t1 - t0) || 1) * (W - m.l - m.r);
+  const Y = v => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": `${meta.label} trend with 30-day baseline` }, host);
+  niceTicks(lo, hi, 4).forEach(v => {
+    el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: "grid" }, svg);
+    el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = key === "sleep_hours" ? v + "h" : v;
+  });
+  // x labels: month starts, or weekly for short ranges
+  const span = (t1 - t0) / 864e5;
+  pts.forEach(p => {
+    const d = dt(p[0]);
+    const mark = span > 45 ? d.getDate() === 1 : d.getDay() === 1;
+    if (mark) el("text", { x: X(p[0]), y: H - 6, "text-anchor": "middle" }, svg).textContent = span > 45 ? d.toLocaleDateString(undefined, { month: "short" }) : dfmt(p[0]);
+  });
+  // band + baseline, drawn in contiguous runs
+  let runs = [], cur = [];
+  pts.forEach(p => { if (p[2] != null && p[3] != null) cur.push(p); else if (cur.length) { runs.push(cur); cur = []; } });
+  if (cur.length) runs.push(cur);
+  runs.forEach(r => {
+    const up = r.map(p => `${X(p[0])},${Y(p[2] + K * p[3])}`), dn = r.slice().reverse().map(p => `${X(p[0])},${Y(p[2] - K * p[3])}`);
+    el("polygon", { points: up.concat(dn).join(" "), fill: COLORS.band }, svg);
+    el("polyline", { points: r.map(p => `${X(p[0])},${Y(p[2])}`).join(" "), fill: "none", stroke: COLORS.base, "stroke-width": 1.5, "stroke-linejoin": "round" }, svg);
+  });
+  // daily values (faint, gaps for missing days) + 7-day average (bold)
+  const avg7 = pts.map((p, i) => { const w = pts.slice(Math.max(0, i - 6), i + 1).map(q => q[1]).filter(v => v != null); return w.length >= 4 && p[1] != null ? w.reduce((a, b) => a + b, 0) / w.length : null; });
+  const pathOf = ys => { let d = "", pen = false; ys.forEach((v, i) => { if (v == null) { pen = false; return; } d += `${pen ? "L" : "M"}${X(pts[i][0])},${Y(v)}`; pen = true; }); return d; };
+  el("path", { d: pathOf(pts.map(p => p[1])), fill: "none", stroke: COLORS.s1, "stroke-opacity": .35, "stroke-width": 1.25, "stroke-linejoin": "round" }, svg);
+  el("path", { d: pathOf(avg7), fill: "none", stroke: COLORS.s1, "stroke-width": 2.5, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+  // breakouts
+  let nb = 0, nw = 0;
+  pts.forEach(p => {
+    if (p[1] == null || p[2] == null || p[3] == null) return;
+    const diff = p[1] > p[2] + K * p[3] ? 1 : p[1] < p[2] - K * p[3] ? -1 : 0;
+    if (!diff) return;
+    const g = goodness(key, diff);
+    const fill = g === "good" ? COLORS.good : g === "bad" ? COLORS.bad : COLORS.s1;
+    if (g === "good") nb++; else if (g === "bad") nw++;
+    el("circle", { cx: X(p[0]), cy: Y(p[1]), r: 4, fill, stroke: COLORS.surface, "stroke-width": 2 }, svg);
+  });
+  const brk = document.getElementById("brk-" + key);
+  if (brk) brk.textContent = meta.good ? `${nw} worse · ${nb} better breakouts` : `${nb + nw} breakouts`;
+  // hover
+  const cross = el("line", { y1: m.t, y2: H - m.b, stroke: "rgba(255,255,255,.25)", "stroke-width": 1, visibility: "hidden" }, svg);
+  const dot = el("circle", { r: 4.5, fill: COLORS.s1, stroke: COLORS.surface, "stroke-width": 2, visibility: "hidden" }, svg);
+  const ov = el("rect", { x: m.l, y: 0, width: W - m.l - m.r, height: H, fill: "transparent" }, svg);
+  ov.addEventListener("pointermove", ev => {
+    const bx = svg.getBoundingClientRect(), px = (ev.clientX - bx.left) * (W / bx.width);
+    let best = 0, bd = Infinity;
+    pts.forEach((p, i) => { const dd = Math.abs(X(p[0]) - px); if (dd < bd) { bd = dd; best = i; } });
+    const p = pts[best];
+    cross.setAttribute("x1", X(p[0])); cross.setAttribute("x2", X(p[0])); cross.setAttribute("visibility", "visible");
+    if (p[1] != null) { dot.setAttribute("cx", X(p[0])); dot.setAttribute("cy", Y(p[1])); dot.setAttribute("visibility", "visible"); } else dot.setAttribute("visibility", "hidden");
+    const unit = key === "sleep_hours" ? "" : (meta.unit ? " " + meta.unit : "");
+    showTip(`<div class="t-d">${dfmt(p[0], { weekday: "short", month: "short", day: "numeric" })}</div>
+      <div class="t-r"><span><i class="sw-line" style="background:${COLORS.s1}"></i>${esc(meta.label)}</span><b>${p[1] == null ? "no data" : fmtVal(key, p[1]) + esc(unit)}</b></div>
+      ${(() => { const i = pts.indexOf(p); return avg7[i] != null ? `<div class="t-r"><span><i class="sw-line" style="background:${COLORS.s1};height:3px"></i>7-day avg</span><span>${fmtVal(key, avg7[i])}${esc(unit)}</span></div>` : ""; })()}
+      <div class="t-r"><span><i class="sw-line" style="background:${COLORS.base}"></i>Baseline</span><span>${p[2] == null ? "—" : fmtVal(key, p[2]) + esc(unit)}</span></div>
+      ${p[3] != null ? `<div class="t-r"><span><i class="sw-band"></i>Normal range</span><span>${fmtVal(key, p[2] - K * p[3])}–${fmtVal(key, p[2] + K * p[3])}</span></div>` : ""}`, ev.clientX, ev.clientY);
+  });
+  ov.addEventListener("pointerleave", () => { hideTip(); cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); });
+}
+
+function stagesSection() {
+  app.insertAdjacentHTML("beforeend", `<section>
+    <div class="sec-head"><h2>Sleep stages</h2><span class="sub">Minutes per night · follows the date range above</span></div>
+    <div class="card">
+      <div class="legend">${STAGES.map(([n, c]) => `<span><i class="sw-sq" style="background:${c}"></i>${n}</span>`).join("")}</div>
+      <div class="chart" id="stages"></div>
+      <div id="composition" style="margin-top:18px"></div>
+    </div></section>`);
+}
+
+function stagesChart() {
+  const host = document.getElementById("stages");
+  const pts = D.stages.filter(p => inRange(p[0]));
+  host.innerHTML = "";
+  if (!pts.length) { host.innerHTML = `<div class="empty">No sleep data in this range.</div>`; return; }
+  const W = Math.max(280, host.clientWidth), H = 220, m = { l: 40, r: 10, t: 10, b: 24 };
+  const totals = pts.map(p => p.slice(1).reduce((a, b) => a + (b || 0), 0));
+  const hi = Math.max(...totals) * 1.05 / 60;
+  const Y = h => m.t + (1 - h / hi) * (H - m.t - m.b);
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": "Sleep stages per night" }, host);
+  niceTicks(0, hi, 4).forEach(v => { el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: "grid" }, svg); el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = v + "h"; });
+  const t0 = +dt(pts[0][0]), t1 = +dt(pts[pts.length - 1][0]), nDays = Math.round((t1 - t0) / 864e5) + 1;
+  const slot = (W - m.l - m.r) / nDays, gap = slot > 6 ? 2 : slot > 3 ? 1 : 0, bw = Math.max(1, slot - gap);
+  const X = s => m.l + Math.round((+dt(s) - t0) / 864e5) * slot;
+  const span = nDays;
+  pts.forEach(p => {
+    let base = 0;
+    [1, 2, 3, 4].forEach((idx, si) => {
+      const h = (p[idx] || 0) / 60; if (!h) return;
+      const y0 = Y(base), y1 = Y(base + h);
+      el("rect", { x: X(p[0]) + gap / 2, y: y1 + (si ? 0 : 0), width: bw, height: Math.max(0, y0 - y1 - (gap && si < 3 ? 1 : 0)), fill: STAGES[si][1], rx: bw > 6 ? 2 : 0 }, svg);
+      base += h;
+    });
+    const d = dt(p[0]);
+    if (span > 45 ? d.getDate() === 1 : d.getDay() === 1) el("text", { x: X(p[0]) + slot / 2, y: H - 6, "text-anchor": "middle" }, svg).textContent = span > 45 ? d.toLocaleDateString(undefined, { month: "short" }) : dfmt(p[0]);
+  });
+  const ov = el("rect", { x: m.l, y: 0, width: W - m.l - m.r, height: H, fill: "transparent" }, svg);
+  const hl = el("rect", { y: m.t, height: H - m.t - m.b, width: slot, fill: "rgba(255,255,255,.06)", visibility: "hidden" }, svg);
+  svg.insertBefore(hl, svg.firstChild);
+  ov.addEventListener("pointermove", ev => {
+    const bx = svg.getBoundingClientRect(), px = (ev.clientX - bx.left) * (W / bx.width);
+    let best = 0, bd = Infinity;
+    pts.forEach((p, i) => { const dd = Math.abs(X(p[0]) + slot / 2 - px); if (dd < bd) { bd = dd; best = i; } });
+    const p = pts[best], tot = p.slice(1).reduce((a, b) => a + (b || 0), 0);
+    hl.setAttribute("x", X(p[0])); hl.setAttribute("visibility", "visible");
+    showTip(`<div class="t-d">Night ending ${dfmt(p[0], { weekday: "short", month: "short", day: "numeric" })}</div>` +
+      STAGES.map(([n, c], i) => `<div class="t-r"><span><i class="sw-sq" style="background:${c}"></i>${n}</span><span>${hm((p[i + 1] || 0) / 60)} · ${Math.round((p[i + 1] || 0) / tot * 100)}%</span></div>`).join(""), ev.clientX, ev.clientY);
+  });
+  ov.addEventListener("pointerleave", () => { hideTip(); hl.setAttribute("visibility", "hidden"); });
+
+  // composition: last 30 nights vs the 30 before
+  const all = D.stages, last = dt(all[all.length - 1][0]);
+  const pick = (a, b) => all.filter(p => { const k = (last - dt(p[0])) / 864e5; return k >= a && k < b; });
+  const rows = [["Last 30 nights", pick(0, 30)], ["Previous 30", pick(30, 60)]].map(([label, arr]) => {
+    if (arr.length < 7) return `<div class="stack-row"><span>${label}</span><span class="sub">Too few nights (${arr.length})</span></div>`;
+    const sums = [1, 2, 3, 4].map(i => arr.reduce((a, p) => a + (p[i] || 0), 0) / arr.length), tot = sums.reduce((a, b) => a + b, 0);
+    return `<div class="stack-row"><span>${label}<br><span class="sub">${arr.length} nights · avg ${hm(tot / 60)}</span></span><div class="stack-bar">${sums.map((s, i) => {
+      const w = s / tot * 100; return `<div style="width:${w}%;background:${STAGES[i][1]}" title="${STAGES[i][0]}: ${hm(s / 60)} (${Math.round(w)}%)">${w > 11 ? `${STAGES[i][0]} ${Math.round(w)}%` : ""}</div>`;
+    }).join("")}</div></div>`;
+  }).join("");
+  document.getElementById("composition").innerHTML = rows;
+}
+
+// ---------------------------------------------------------------- insights
+const CONF = { strong: "Strong evidence", likely: "Likely", noise: "Could be noise", thin: "Too little data" };
+function effList(block, unit, kind) {
+  const items = block.ranked;
+  if (!items.length) return `<div class="empty">Nothing in your data moves this in that direction.</div>`;
+  const maxAbs = Math.max(...items.map(e => Math.abs(e.effect)), 1e-9);
+  const color = kind === "hurt" ? COLORS.bad : COLORS.good;
+  const row = (e, i) => {
+    const dim = e.conf === "noise";
+    const val = kind === "hurt" ? -Math.abs(e.effect) : Math.abs(e.effect);
+    const main = unit === "pts" ? `${signed(val, 1)} pts` : `${signed(e.eff_pct, 0)}%`;
+    const second = unit === "pts" ? (e.eff_pct != null ? `(${signed(kind === "hurt" ? -Math.abs(e.eff_pct) : Math.abs(e.eff_pct), 0)}% relative)` : "") : `(${signed(val, unit === "min" ? 0 : 1)} ${unit})`;
+    let adj = "";
+    if (e.adj_effect != null && e.adj && !dim) {
+      adj = !e.explained
+        ? `Holds after accounting for your other habits: ${signed(e.adj_effect, unit === "min" ? 0 : 1)} ${unit === "pts" ? "pts" : unit}.`
+        : `Mostly explained by other habits that happen alongside it (adjusted ${signed(e.adj_effect, 1)} ${unit === "pts" ? "pts" : unit}, not significant).`;
+    }
+    return `<div class="eff ${dim ? "dim" : ""}"><div class="rk">${i + 1}</div><div>
+      <div class="lbl">${esc(e.label)}</div>
+      <div class="line"><span class="num" style="color:${dim ? "var(--text-2)" : "#fff"}">${main}</span><span class="n">${second}</span>
+        <span class="bar" aria-hidden="true"><i style="width:${Math.abs(e.effect) / maxAbs * 100}%;background:${dim ? "var(--axis)" : color}"></i></span>
+        <span class="badge ${e.conf}">${CONF[e.conf]}</span></div>
+      <div class="n" style="margin-top:4px">based on ${e.n} days with vs ${e.n_other} without${e.q != null ? ` · q = ${e.q.toFixed(3)}` : ""}</div></div>
+      ${adj ? `<div class="adj">${adj}</div>` : ""}</div>`;
+  };
+  const real = items.filter(e => e.conf !== "noise"), noise = items.filter(e => e.conf === "noise");
+  const rows = (real.length ? real.map(row).join("") : `<div class="empty">Nothing clears the evidence bar yet.</div>`) +
+    (noise.length ? `<details class="thin-list" style="border-top-style:solid"><summary>${noise.length} more that could be noise (${noise.map(e => esc(e.label)).slice(0, 3).join(", ")}${noise.length > 3 ? ", …" : ""})</summary>${noise.map((e, i) => row(e, real.length + i)).join("")}</details>` : "");
+  const thin = block.thin.length ? `<div class="thin-list"><b>Too little data to call:</b> ${block.thin.map(e => `${esc(e.label)} (${e.n} vs ${e.n_other} days)`).join(" · ")}. Needs at least ${D.min_n} days on each side.</div>` : "";
+  return rows + thin;
+}
+
+function insightsSection() {
+  app.insertAdjacentHTML("beforeend", `<section>
+    <div class="sec-head"><h2>What your data says</h2><span class="sub">Each behaviour compares mornings after it happened with mornings after it didn't</span></div>
+    <div class="card insight">
+      <h3>What hurts your recovery most</h3>
+      <p class="explain">Points of recovery % (e.g. 62% → 50% is −12 pts). Behaviours are from the day and night before each recovery. Ranked by evidence: effects that hold on their own come first, then ones mostly explained by other habits, then possible noise.</p>
+      ${effList(D.hurts_recovery, "pts", "hurt")}
+    </div>
+    <div class="two" style="margin-top:12px">
+      <div class="card insight"><h3>What lifts your deep sleep</h3><p class="explain">Change in deep (slow-wave) sleep that night, relative to nights without it.</p>${effList(D.lifts_deep, "min", "lift")}</div>
+      <div class="card insight"><h3>What lifts your HRV</h3><p class="explain">Change in next-morning HRV (RMSSD), relative to mornings without it.</p>${effList(D.lifts_hrv, "ms", "lift")}</div>
+    </div>
+  </section>`);
+}
+
+function strainSection() {
+  const s = D.strain;
+  let head = "";
+  if (s.range) {
+    const pen = s.above && s.above.mean != null && s.inside.mean != null ? s.above.mean - s.inside.mean : null;
+    head = `<div class="bigrange">${s.range[0]}–${s.range[1]} <span class="sub" style="font-size:14px">day strain</span></div>
+      <p class="verdict">Your optimal range: the most load you can take on while next-day recovery stays at or above your average of <b>${num(s.avg_recovery, 0)}%</b>.
+      Correlation between strain and next-day recovery: <b>r = ${num(s.r, 2)}</b> (${s.n} day pairs; each extra strain point ≈ ${signed(s.slope, 1)} pts recovery).
+      ${pen != null ? `Above ${s.range[1]} (${s.above.n} days, ${pct(s.above.share)} of the time) your next-day recovery averages <b>${num(s.above.mean, 0)}%</b> vs ${num(s.inside.mean, 0)}% below it (${signed(pen, 1)} pts) — <span class="badge ${s.above.conf}">${CONF[s.above.conf]}</span>` : ""}
+      ${s.above && s.above.n < D.min_n ? ` You've only gone above ${s.range[1]} on ${s.above.n} days, so the ceiling isn't pinned down yet.` : ""}</p>`;
+  } else {
+    head = `<p class="verdict">${esc(s.verdict || "")}</p>`;
+  }
+  app.insertAdjacentHTML("beforeend", `<section><div class="card insight">
+    <h3>Day strain vs next-day recovery</h3>${head}
+    <div class="legend"><span><i class="sw-dot" style="background:${COLORS.s1};opacity:.7"></i>One day → next morning</span><span><i class="sw-line" style="background:${COLORS.base}"></i>Average per strain band (hollow = under 5 days)</span>${s.range ? `<span><i class="sw-sq" style="background:rgba(12,163,12,.22)"></i>Optimal range</span>` : ""}</div>
+    <div class="chart" id="scatter"></div></div></section>`);
+}
+
+function scatterChart() {
+  const host = document.getElementById("scatter"), s = D.strain;
+  host.innerHTML = "";
+  if (!s.pairs || !s.pairs.length) { host.innerHTML = `<div class="empty">No strain/recovery pairs.</div>`; return; }
+  const W = Math.max(280, host.clientWidth), H = 280, m = { l: 40, r: 12, t: 12, b: 34 };
+  const X = v => m.l + v / 21 * (W - m.l - m.r), Y = v => m.t + (1 - v / 100) * (H - m.t - m.b);
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": "Scatter of day strain against next-day recovery" }, host);
+  if (s.range) el("rect", { x: X(s.range[0]), y: m.t, width: X(s.range[1]) - X(s.range[0]), height: H - m.t - m.b, fill: "rgba(12,163,12,.10)" }, svg);
+  [0, 25, 50, 75, 100].forEach(v => { el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: "grid" }, svg); el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = v + "%"; });
+  [0, 3, 6, 9, 12, 15, 18, 21].forEach(v => el("text", { x: X(v), y: H - 16, "text-anchor": "middle" }, svg).textContent = v);
+  el("text", { x: (W + m.l) / 2, y: H - 2, "text-anchor": "middle" }, svg).textContent = "Day strain → next-morning recovery";
+  if (s.avg_recovery != null) { el("line", { x1: m.l, x2: W - m.r, y1: Y(s.avg_recovery), y2: Y(s.avg_recovery), stroke: COLORS.base, "stroke-width": 1, opacity: .5 }, svg); el("text", { x: m.l + 6, y: Y(s.avg_recovery) - 6, "text-anchor": "start" }, svg).textContent = `your avg ${Math.round(s.avg_recovery)}%`; }
+  s.pairs.forEach(p => el("circle", { cx: X(p[0]), cy: Y(p[1]), r: 4, fill: COLORS.s1, "fill-opacity": .6, stroke: COLORS.surface, "stroke-width": 1.5 }, svg));
+  const bands = (s.bands || []).filter(b => b.n > 0);
+  el("polyline", { points: bands.map(b => `${X((b.lo + b.hi) / 2)},${Y(b.mean)}`).join(" "), fill: "none", stroke: COLORS.base, "stroke-width": 2 }, svg);
+  bands.forEach(b => el("circle", { cx: X((b.lo + b.hi) / 2), cy: Y(b.mean), r: 5, fill: b.n >= 5 ? COLORS.base : COLORS.surface, stroke: COLORS.base, "stroke-width": 2 }, svg));
+  const ov = el("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "transparent" }, svg);
+  ov.addEventListener("pointermove", ev => {
+    const bx = svg.getBoundingClientRect(), px = (ev.clientX - bx.left) * (W / bx.width), py = (ev.clientY - bx.top) * (H / bx.height);
+    let best = null, bd = 400;
+    s.pairs.forEach(p => { const dd = (X(p[0]) - px) ** 2 + (Y(p[1]) - py) ** 2; if (dd < bd) { bd = dd; best = p; } });
+    const band = bands.find(b => Math.abs(X((b.lo + b.hi) / 2) - px) < 10 && Math.abs(Y(b.mean) - py) < 10);
+    if (band) showTip(`<div class="t-d">Strain ${band.lo}–${band.hi}</div><div class="t-r"><span>Avg next-day recovery</span><b>${num(band.mean, 0)}%</b></div><div class="t-r"><span>Days</span><span>${band.n}${band.n < 5 ? " (too few)" : ""}</span></div>`, ev.clientX, ev.clientY);
+    else if (best) showTip(`<div class="t-d">Strain on ${dfmt(best[2], { month: "short", day: "numeric" })} (day before)</div><div class="t-r"><span>Strain</span><b>${best[0]}</b></div><div class="t-r"><span>Recovery ${dfmt(best[2])}</span><b>${best[1]}%</b></div>`, ev.clientX, ev.clientY);
+    else hideTip();
+  });
+  ov.addEventListener("pointerleave", hideTip);
+}
+
+function trendFlagsSection() {
+  const order = { worse: 0, changed: 1, better: 2, stable: 3, thin: 4 };
+  const rows = D.trends.slice().sort((a, b) => order[a.status] - order[b.status]);
+  const worse = rows.filter(r => r.status === "worse");
+  const unit = r => r.key === "sleep_hours" ? "" : (r.unit ? " " + r.unit : "");
+  const summary = worse.length
+    ? `<p class="verdict"><b>${worse.length} metric${worse.length > 1 ? "s are" : " is"} trending the wrong way:</b> ${worse.map(r => `${esc(r.label)} ${fmtVal(r.key, r.prev)} → ${fmtVal(r.key, r.last)}${esc(unit(r))}`).join(" · ")}.</p>`
+    : `<p class="verdict">Nothing is trending the wrong way by a margin the data can support.</p>`;
+  const chip = r => ({ worse: `<span class="chip worse">▼ Worse</span>`, better: `<span class="chip better">▲ Better</span>`, stable: `<span class="chip stable">Stable</span>`, changed: `<span class="chip changed">Changed</span>`, thin: `<span class="chip thin">Too little data</span>` })[r.status];
+  app.insertAdjacentHTML("beforeend", `<section><div class="card insight">
+    <h3>Last 30 days vs the 30 before</h3>
+    <p class="explain">Flagged only when the shift is unlikely to be chance (permutation test, p &lt; 0.10). "Changed" is used for metrics with no good or bad direction.</p>
+    ${summary}
+    <div class="scroll"><table><thead><tr><th>Metric</th><th>Previous 30</th><th>Last 30</th><th>Change</th><th>p</th><th></th></tr></thead><tbody>
+    ${rows.map(r => r.status === "thin" ? `<tr><td>${esc(r.label)}</td><td colspan="4" style="text-align:left;color:var(--muted)">${r.n_prev} vs ${r.n_last} days — need 10+ in each window</td><td>${chip(r)}</td></tr>` :
+      `<tr class="${r.status === "worse" ? "worse" : ""}"><td>${esc(r.label)}</td><td>${fmtVal(r.key, r.prev)}${esc(unit(r))}</td><td>${fmtVal(r.key, r.last)}${esc(unit(r))}</td><td>${r.key === "sleep_hours" ? signed(r.diff * 60, 0) + " min" : signed(r.diff, r.dec)} (${signed(r.pct, 1)}%)</td><td>${num(r.p, 3)}</td><td>${chip(r)}</td></tr>`).join("")}
+    </tbody></table></div></div></section>`);
+}
+
+function top3Section() {
+  const t = D.top3;
+  const cards = t.map((c, i) => `<div class="card pri">
+      <div class="no">Priority ${i + 1}</div>
+      <div class="gain">+${num(c.gain, 1)}<small>pts avg recovery</small></div>
+      <div class="act">${esc(c.action)}</div>
+      <p><b>${esc(c.label)}</b> happens on ${pct(c.freq)} of your days (${c.n} of ${c.n + c.n_other}) and costs ${num(Math.abs(c.effect), 1)} pts of recovery each time${c.adjusted ? ` after accounting for your other habits (${num(Math.abs(c.raw_effect), 1)} pts unadjusted)` : ""}.</p>
+      <p>Cutting it out would lift your average recovery by about ${num(c.gain, 1)} pts. <span class="badge ${c.conf}">${CONF[c.conf]}</span></p>
+    </div>`).join("");
+  const note = t.length < 3 ? `<p class="verdict">Only ${t.length} change${t.length === 1 ? " is" : "s are"} backed by enough data. Anything else would be a guess.</p>` : "";
+  app.insertAdjacentHTML("beforeend", `<section>
+    <div class="sec-head"><h2>The 3 changes that would raise your recovery most</h2><span class="sub">Ranked by expected gain = effect when it happens × how often it happens</span></div>
+    ${note}<div class="top3">${cards || `<div class="card empty">No change clears the evidence bar yet. Keep collecting data.</div>`}</div>
+    <p class="sub" style="margin-top:10px">Gains aren't strictly additive: habits that travel together (late nights, short sleep, weekends) share some of the same effect.</p>
+  </section>`);
+}
+
+function methodSection() {
+  const th = D.thresholds || {};
+  app.insertAdjacentHTML("beforeend", `<section><div class="card method">
+    <h3 style="color:var(--text);font-size:15px;margin:0 0 8px">How this was worked out</h3>
+    <ul>
+      <li>Every morning's recovery, HRV and sleep is paired with what happened the day and night before. "Late bedtime" means after ${esc(th.late_bed || "—")}, 45 min past your median; "high strain" means ≥ ${esc(th.high_strain ?? "—")}, your top 25% of days.</li>
+      <li>Each behaviour compares mornings with it against mornings without it. A claim needs at least ${D.min_n} days on each side, otherwise it's listed as too little data.</li>
+      <li>Evidence labels use a permutation test corrected for testing ${D.hurts_recovery.ranked.length + D.hurts_recovery.thin.length}+ behaviours at once (Benjamini–Hochberg q): Strong q &lt; 0.05, Likely q &lt; 0.15, otherwise could be noise.</li>
+      <li>The "after accounting for your other habits" figures come from one regression with all behaviours at once. It separates habits that travel together.</li>
+      <li>These are associations in your own data, not controlled experiments. The WHOOP API doesn't expose Journal entries (alcohol, caffeine, late meals), so those can't be tested directly. Friday and Saturday nights often stand in for them.</li>
+      <li>Baselines are the trailing 30 calendar days before each date (at least 7 values). The normal range is ±1.5 standard deviations; a day outside it is marked as a breakout.</li>
+    </ul></div></section>`);
+}
+
+function tableSection() {
+  const cols = [["date", "Date"], ["recovery", "Recovery %"], ["hrv", "HRV ms"], ["rhr", "RHR"], ["sleep_perf", "Sleep perf %"], ["sleep_hours", "Asleep"], ["strain", "Strain"], ["spo2", "SpO₂ %"], ["resp", "Resp"], ["deep_min", "Deep min"], ["rem_min", "REM min"]];
+  app.insertAdjacentHTML("beforeend", `<section><details><summary>Show all ${D.table.length} days as a table</summary>
+    <div class="card scroll" style="margin-top:12px;max-height:520px;overflow:auto"><table><thead><tr>${cols.map(c => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>
+    ${D.table.slice().reverse().map(r => `<tr>${cols.map(([k]) => `<td>${k === "date" ? r.date : fmtVal(k, r[k])}</td>`).join("")}</tr>`).join("")}
+    </tbody></table></div></details>
+    <p class="sub" style="margin-top:24px">Source: ${esc(D.source || "WHOOP API v2")} · generated ${esc(D.generated_at || "")}</p></section>`);
+}
+
+function drawCharts() {
+  document.querySelectorAll("[data-line]").forEach(h => lineChart(h, h.dataset.line));
+  stagesChart();
+  scatterChart();
+}
+
+header();
+tilesSection();
+trendsSection();
+stagesSection();
+insightsSection();
+strainSection();
+trendFlagsSection();
+top3Section();
+methodSection();
+tableSection();
+drawCharts();
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(drawCharts, 120); });
+</script>
+</body>
+</html>

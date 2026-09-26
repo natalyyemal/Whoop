@@ -3,3 +3,6 @@
 .whoop_tokens.json
 whoop_data.json
 __pycache__/
+dashboard.html
+demo_whoop_data.json
+demo_dashboard.html

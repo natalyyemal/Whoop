@@ -190,6 +190,22 @@ class SyncTest(unittest.TestCase):
         self.assertEqual([u for _, u in fake.calls][0], ws.TOKEN_URL)
         self.assertEqual(len(fake.calls), 2)
 
+    def test_day_keyed_by_wake_date_not_cycle_start(self):
+        # Cycles start at sleep onset: 23:30 local on the 9th and 00:30 local on the 11th.
+        c1 = {"id": 1, "start": "2026-09-10T02:30:00.000Z", "timezone_offset": "-03:00", "score_state": "SCORED",
+              "score": {"strain": 9}}
+        c2 = {"id": 2, "start": "2026-09-11T03:30:00.000Z", "timezone_offset": "-03:00", "score_state": "SCORED",
+              "score": {"strain": 11}}
+        s1 = dict(sleep("s1", 1, "2026-09-10"), start="2026-09-10T02:30:00.000Z", end="2026-09-10T10:00:00.000Z")
+        s2 = dict(sleep("s2", 2, "2026-09-11"), start="2026-09-11T03:30:00.000Z", end="2026-09-11T10:30:00.000Z")
+        days = ws.build_days([c1, c2], [recovery(1, "s1"), recovery(2, "s2")], [s1, s2], [],
+                             "2026-09-01", "2026-09-30")
+        self.assertEqual(list(days), ["2026-09-10", "2026-09-11"])
+        self.assertEqual(days["2026-09-10"]["cycle"]["strain"], 9)
+        # No sleep -> cycle start + 6 h: 23:30 on the 9th -> the 10th.
+        days = ws.build_days([c1], [], [], [], "2026-09-01", "2026-09-30")
+        self.assertEqual(list(days), ["2026-09-10"])
+
     def test_state_is_8_chars(self):
         s = ws.random_state()
         self.assertEqual(len(s), 8)
