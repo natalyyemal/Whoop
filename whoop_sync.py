@@ -52,6 +52,7 @@ ENDPOINT_SCOPE = {
     "/user/measurement/body": "read:body_measurement",
 }
 PAGE_LIMIT = 25
+USER_AGENT = "whoop-sync/1.0 (+personal data export)"
 KJ_PER_KCAL = 4.184
 
 
@@ -91,6 +92,8 @@ def http_json(method, url, *, headers=None, form=None, timeout=30):
     if form is not None:
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
     req.add_header("Accept", "application/json")
+    # WHOOP's edge (Cloudflare) rejects urllib's default "Python-urllib/x.y" agent with error 1010.
+    req.add_header("User-Agent", USER_AGENT)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             status, body, hdrs = resp.status, resp.read(), resp.headers
