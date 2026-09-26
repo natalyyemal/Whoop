@@ -1,0 +1,5 @@
+# Secrets, OAuth tokens and personal health data - never commit
+.env
+.whoop_tokens.json
+whoop_data.json
+__pycache__/
