@@ -66,3 +66,26 @@ class AnalysisTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LanguageTest(unittest.TestCase):
+    def test_spanish_translation_covers_template(self):
+        import i18n
+        template = (bd.HERE / "dashboard_template.html").read_text()
+        out = i18n.apply_template(template, "es")  # raises if any string no longer matches
+        self.assertIn('const LOCALE = "es-AR";', out)
+        for en in ("What hurts your recovery most", "Trends against your baseline", "Strong evidence"):
+            self.assertNotIn(en, out)
+
+    def test_both_languages_render(self):
+        tmp = Path(tempfile.mkdtemp()) / "demo.json"
+        with unittest.mock.patch("builtins.print"):
+            make_demo_data.main(tmp)
+        data = json.loads(tmp.read_text())
+        es = bd.analyse(data, "es")
+        self.assertEqual(es["tiles"][0]["label"], "Recuperación")
+        self.assertIn("Esfuerzo", es["hurts_recovery"]["ranked"][0]["label"] + str(es["top3"]))
+        self.assertIn("Qué perjudica", bd.render(es, "es"))
+        en = bd.analyse(data, "en")
+        self.assertEqual(en["tiles"][0]["label"], "Recovery")
+        self.assertIn("What hurts your recovery most", bd.render(en, "en"))

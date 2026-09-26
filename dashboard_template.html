@@ -135,6 +135,7 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 14px; }
 <div class="tip" id="tip" role="tooltip"></div>
 <script>
 const D = /*__DATA__*/null;
+const LOCALE = "en-US";
 const NS = "http://www.w3.org/2000/svg";
 const COLORS = { s1: "#3987e5", s2: "#d95926", s3: "#199e70", s4: "#c98500", good: "#0ca30c", bad: "#d03b3b", base: "#c3c2b7", band: "rgba(195,194,183,0.11)", surface: "#161615" };
 const K = 1.5; // normal range = baseline ± 1.5 SD; outside it counts as a breakout
@@ -145,12 +146,13 @@ const tip = document.getElementById("tip");
 
 // ---------------------------------------------------------------- helpers
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const num = (v, dec = 0) => v == null ? "—" : Number(v).toFixed(dec);
-const signed = (v, dec = 1) => v == null ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(dec);
+const fixed = (v, dec) => Number(v).toLocaleString(LOCALE, { minimumFractionDigits: dec, maximumFractionDigits: dec });
+const num = (v, dec = 0) => v == null ? "—" : fixed(v, dec);
+const signed = (v, dec = 1) => v == null ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "±") + fixed(Math.abs(v), dec);
 const hm = h => { if (h == null) return "—"; const m = Math.round(h * 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`; };
 const fmtVal = (key, v) => key === "sleep_hours" ? hm(v) : num(v, META[key]?.dec ?? 1);
 const dt = s => new Date(s + "T00:00:00");
-const dfmt = (s, opts = { month: "short", day: "numeric" }) => dt(s).toLocaleDateString(undefined, opts);
+const dfmt = (s, opts = { month: "short", day: "numeric" }) => dt(s).toLocaleDateString(LOCALE, opts);
 const pct = v => v == null ? "" : `${Math.round(v * 100)}%`;
 function el(tag, attrs = {}, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
 function niceTicks(lo, hi, n = 4) {
@@ -273,7 +275,7 @@ function lineChart(host, key) {
   pts.forEach(p => {
     const d = dt(p[0]);
     const mark = span > 45 ? d.getDate() === 1 : d.getDay() === 1;
-    if (mark) el("text", { x: X(p[0]), y: H - 6, "text-anchor": "middle" }, svg).textContent = span > 45 ? d.toLocaleDateString(undefined, { month: "short" }) : dfmt(p[0]);
+    if (mark) el("text", { x: X(p[0]), y: H - 6, "text-anchor": "middle" }, svg).textContent = span > 45 ? d.toLocaleDateString(LOCALE, { month: "short" }) : dfmt(p[0]);
   });
   // band + baseline, drawn in contiguous runs
   let runs = [], cur = [];
@@ -357,7 +359,7 @@ function stagesChart() {
       base += h;
     });
     const d = dt(p[0]);
-    if (span > 45 ? d.getDate() === 1 : d.getDay() === 1) el("text", { x: X(p[0]) + slot / 2, y: H - 6, "text-anchor": "middle" }, svg).textContent = span > 45 ? d.toLocaleDateString(undefined, { month: "short" }) : dfmt(p[0]);
+    if (span > 45 ? d.getDate() === 1 : d.getDay() === 1) el("text", { x: X(p[0]) + slot / 2, y: H - 6, "text-anchor": "middle" }, svg).textContent = span > 45 ? d.toLocaleDateString(LOCALE, { month: "short" }) : dfmt(p[0]);
   });
   const ov = el("rect", { x: m.l, y: 0, width: W - m.l - m.r, height: H, fill: "transparent" }, svg);
   const hl = el("rect", { y: m.t, height: H - m.t - m.b, width: slot, fill: "rgba(255,255,255,.06)", visibility: "hidden" }, svg);
@@ -409,7 +411,7 @@ function effList(block, unit, kind) {
       <div class="line"><span class="num" style="color:${dim ? "var(--text-2)" : "#fff"}">${main}</span><span class="n">${second}</span>
         <span class="bar" aria-hidden="true"><i style="width:${Math.abs(e.effect) / maxAbs * 100}%;background:${dim ? "var(--axis)" : color}"></i></span>
         <span class="badge ${e.conf}">${CONF[e.conf]}</span></div>
-      <div class="n" style="margin-top:4px">based on ${e.n} days with vs ${e.n_other} without${e.q != null ? ` · q = ${e.q.toFixed(3)}` : ""}</div></div>
+      <div class="n" style="margin-top:4px">based on ${e.n} days with vs ${e.n_other} without${e.q != null ? ` · q = ${num(e.q, 3)}` : ""}</div></div>
       ${adj ? `<div class="adj">${adj}</div>` : ""}</div>`;
   };
   const real = items.filter(e => e.conf !== "noise"), noise = items.filter(e => e.conf === "noise");

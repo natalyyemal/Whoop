@@ -5,7 +5,7 @@ Standard-library Python only.
 ```bash
 cp .env.example .env              # add WHOOP_CLIENT_ID / WHOOP_CLIENT_SECRET
 python3 whoop_sync.py             # OAuth in your browser, pulls 180 days -> whoop_data.json
-python3 build_dashboard.py        # -> dashboard.html (one self-contained file, open it in a browser)
+python3 build_dashboard.py        # -> dashboard.html in Spanish (add --lang en for English); open it in a browser
 ```
 
 Preview without a WHOOP account (clearly marked synthetic data):

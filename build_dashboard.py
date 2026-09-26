@@ -26,10 +26,13 @@ import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+import i18n
+
 HERE = Path(__file__).resolve().parent
 MIN_N = 8            # minimum days on each side of a comparison
 PERMUTATIONS = 2000
 BASELINE_DAYS = 30
+T = i18n.text("es")  # set by analyse()
 
 # key, label, unit, which direction is good, decimals
 TILES = [
@@ -131,34 +134,14 @@ def build_flags(rows):
     hi_strain = round(quantile(strains, 0.75), 1) if len(strains) >= 20 else None
     late_bed = st.median(beds) + 45 if len(beds) >= 20 else None
 
-    defs = [
-        dict(key="late_workout", on="Workout ending < 3 h before bed", off="No workout in the 3 h before bed",
-             action="Finish training at least 3 hours before bedtime (move evening sessions earlier or to the morning)."),
-        dict(key="short_sleep", on="Under 7 h asleep", off="7 h or more asleep",
-             action="Protect 7+ hours asleep: set a fixed lights-out time that leaves 7.5 h in bed."),
-        dict(key="late_bed", on=f"Bedtime after {fmt_clock(late_bed)} (45 min past your usual)" if late_bed else "Late bedtime",
-             off=f"In bed by {fmt_clock(late_bed)}" if late_bed else "Usual bedtime",
-             action=f"Be asleep by {fmt_clock(late_bed - 45)} - your median bedtime - instead of drifting past {fmt_clock(late_bed)}." if late_bed else ""),
-        dict(key="bed_shift", on="Bedtime shifted > 1 h vs the night before", off="Bedtime within 1 h of the night before",
-             action="Keep bedtime within an hour of the previous night, weekends included."),
-        dict(key="weekend", on="Friday / Saturday nights", off="Sunday - Thursday nights",
-             action="Treat Friday and Saturday nights like weeknights (bedtime, alcohol, late meals)."),
-        dict(key="high_strain", on=f"Strain ≥ {hi_strain} the day before (your top 25%)" if hi_strain else "High strain the day before",
-             off=f"Strain below {hi_strain} the day before" if hi_strain else "Lower strain the day before",
-             action=f"Cap day strain below {hi_strain} unless the next day is planned as easy." if hi_strain else ""),
-        dict(key="back_to_back", on="Two high-strain days in a row", off="No back-to-back high-strain days",
-             action="Put an easier day after every high-strain day."),
-        dict(key="hard_zones", on="≥ 15 min in HR zones 4-5 the day before", off="< 15 min in zones 4-5 the day before",
-             action="Limit zone 4-5 work to under 15 minutes per day, or schedule it earlier."),
-        dict(key="zone2", on="≥ 30 min of zone-2 cardio the day before", off="< 30 min of zone 2 the day before",
-             action="Add 30+ minutes of easy zone-2 cardio on most days."),
-        dict(key="morning_workout", on="Morning workout (before noon) the day before", off="No morning workout the day before",
-             action="Move training to the morning."),
-        dict(key="rest_day", on="Rest day before (no workout)", off="Trained the day before",
-             action="Schedule full rest days."),
-        dict(key="nap", on="Napped the day before", off="No nap the day before",
-             action="Avoid daytime naps."),
-    ]
+    dec = lambda v: str(v).replace(".", T["decimal"])
+    fmt = {"hi": dec(hi_strain), "late": fmt_clock(late_bed) if late_bed else "?",
+           "usual": fmt_clock(late_bed - 45) if late_bed else "?"}
+    defs = []
+    for key in ("late_workout", "short_sleep", "late_bed", "bed_shift", "weekend", "high_strain", "back_to_back",
+                "hard_zones", "zone2", "morning_workout", "rest_day", "nap"):
+        on, off, action = (x.format(**fmt) for x in T["flags"][key])
+        defs.append(dict(key=key, on=on, off=off, action=action))
 
     vals = []
     for i, r in enumerate(rows):
@@ -192,7 +175,7 @@ def build_flags(rows):
             for k in ("hard_zones", "zone2", "morning_workout", "rest_day", "nap"):
                 f[k] = None
         vals.append(f)
-    thresholds = {"high_strain": hi_strain, "late_bed": fmt_clock(late_bed) if late_bed else None}
+    thresholds = {"high_strain": dec(hi_strain) if hi_strain is not None else None, "late_bed": fmt_clock(late_bed) if late_bed else None}
     return defs, vals, thresholds
 
 
@@ -355,7 +338,7 @@ def strain_analysis(rows, rng):
              if rows[i - 1]["strain"] is not None and rows[i]["recovery"] is not None]
     res = {"pairs": [[round(s, 1), r, d] for s, r, d in pairs], "n": len(pairs)}
     if len(pairs) < 20:
-        res["verdict"] = f"Only {len(pairs)} strain → next-day recovery pairs; too few to find a personal range."
+        res["verdict"] = T["few_pairs"].format(n=len(pairs))
         return res
     xs, ys = [p[0] for p in pairs], [p[1] for p in pairs]
     r = pearson(xs, ys)
@@ -379,12 +362,11 @@ def strain_analysis(rows, rng):
 
     good = [b for b in ok if b["mean"] >= avg]
     if abs(r) < 0.1 or p > 0.2:
-        res["verdict"] = (f"Day strain barely moves your next-day recovery (r = {r:.2f}, {len(pairs)} days). "
-                          "No personal strain ceiling shows up in this data.")
+        res["verdict"] = T["no_link"].format(r=f"{r:.2f}", n=len(pairs))
         res["range"] = None
         return res
     if not good:
-        res["verdict"] = "No strain band reaches your average next-day recovery with at least 5 days of data."
+        res["verdict"] = T["no_band"]
         res["range"] = None
         return res
     # Optimal = the most training load that doesn't cost next-day recovery: the highest band
@@ -416,6 +398,7 @@ def trend_flags(rows, rng):
     for key, label, unit, good, dec in TILES + EXTRA_TREND:
         a = [r[key] for r in last if r[key] is not None]
         b = [r[key] for r in prev if r[key] is not None]
+        label, unit = localise(key, label, unit)
         item = {"key": key, "label": label, "unit": unit, "good": good, "dec": dec, "n_last": len(a), "n_prev": len(b)}
         if len(a) < 10 or len(b) < 10:
             item["status"] = "thin"
@@ -440,6 +423,7 @@ def tiles(rows):
     out = []
     for key, label, unit, good, dec in TILES:
         latest = next((r for r in reversed(rows) if r[key] is not None), None)
+        label, unit = localise(key, label, unit)
         item = {"key": key, "label": label, "unit": unit, "good": good, "dec": dec}
         if not latest:
             out.append(item)
@@ -491,8 +475,9 @@ def priorities(recovery_hurts, strain):
     if rg and ab.get("conf") in ("strong", "likely") and strain["inside"]["mean"] is not None:
         eff = ab["mean"] - strain["inside"]["mean"]
         if eff < 0:
-            cands.append({"key": "strain_cap", "label": f"Day strain above {rg[1]:g}",
-                          "action": f"Keep most days in your {rg[0]:g}-{rg[1]:g} strain range and go above {rg[1]:g} only when the next day is planned as easy.",
+            cands.append({"key": "strain_cap", "label": T["cap_label"].format(hi=f"{rg[1]:g}".replace(".", T["decimal"])),
+                          "action": T["cap_action"].format(lo=f"{rg[0]:g}".replace(".", T["decimal"]),
+                                                           hi=f"{rg[1]:g}".replace(".", T["decimal"])),
                           "effect": eff, "raw_effect": eff, "adjusted": False, "freq": ab["share"], "n": ab["n"], "n_other": strain["inside"]["n"],
                           "gain": -eff * ab["share"], "conf": ab["conf"]})
     # Drop the strain cap if it duplicates the high-strain behaviour; keep the larger gain.
@@ -517,7 +502,13 @@ def clean(o):
     return o
 
 
-def analyse(data):
+def localise(key, label, unit):
+    return T["metric"].get(key, label), T["unit"].get(unit, unit)
+
+
+def analyse(data, lang="es"):
+    global T
+    T = i18n.text(lang)
     rng = random.Random(1234)
     rows = build_rows(data)
     defs, flags, thresholds = build_flags(rows)
@@ -546,7 +537,8 @@ def analyse(data):
         "thresholds": thresholds,
         "tiles": tiles(rows),
         "series": series(rows),
-        "series_meta": [{"key": k, "label": l, "unit": u, "good": g, "dec": d} for k, l, u, g, d in TILES + EXTRA_TREND],
+        "series_meta": [{"key": k, "label": localise(k, l, u)[0], "unit": localise(k, l, u)[1], "good": g, "dec": d}
+                        for k, l, u, g, d in TILES + EXTRA_TREND],
         "stages": stages,
         "hurts_recovery": hurts,
         "lifts_deep": ranked(deep_eff, "lift"),
@@ -559,8 +551,8 @@ def analyse(data):
     })
 
 
-def render(result):
-    template = (HERE / "dashboard_template.html").read_text()
+def render(result, lang="es"):
+    template = i18n.apply_template((HERE / "dashboard_template.html").read_text(), lang)
     payload = json.dumps(result, separators=(",", ":")).replace("</", "<\\/")
     return template.replace("/*__DATA__*/null", payload)
 
@@ -569,6 +561,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data", default=str(HERE / "whoop_data.json"))
     ap.add_argument("--out", default=str(HERE / "dashboard.html"))
+    ap.add_argument("--lang", choices=i18n.LANGS, default="es", help="dashboard language (default: es)")
     args = ap.parse_args()
     src = Path(args.data)
     if not src.exists():
@@ -576,8 +569,8 @@ def main():
     data = json.loads(src.read_text())
     if not data.get("days"):
         sys.exit(f"{src} has no days in it.")
-    result = analyse(data)
-    Path(args.out).write_text(render(result))
+    result = analyse(data, args.lang)
+    Path(args.out).write_text(render(result, args.lang))
     print(f"Wrote {args.out}" + ("  [DEMO - synthetic data]" if result["demo"] else ""))
 
 
